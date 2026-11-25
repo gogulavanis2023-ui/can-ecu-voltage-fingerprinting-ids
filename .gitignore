@@ -1,0 +1,25 @@
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.synctex.gz
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+# Arduino
+build/
+*.bin
+*.elf
+*.hex
+out_testbed/

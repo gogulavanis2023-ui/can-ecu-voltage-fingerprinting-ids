@@ -1,0 +1,783 @@
+\documentclass[journal]{IEEEtran}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{booktabs}
+
+\begin{document}
+	
+	\title{Embedded Machine Learning-Based Voltage Fingerprinting for Automotive Cybersecurity: A Survey}
+	
+	\author{Goki~\IEEEmembership{Student}%
+		\thanks{Manuscript in preparation.}}
+	
+	\markboth{Preprint / Draft for Review}{}
+	
+	\maketitle
+	
+	\begin{abstract}
+		Placeholder abstract -- to be finalized once all sections are complete.
+	\end{abstract}
+	
+	\begin{IEEEkeywords}
+		Automotive cybersecurity, Controller Area Network (CAN), voltage
+		fingerprinting, embedded machine learning, intrusion detection,
+		electronic control unit (ECU) identification.
+	\end{IEEEkeywords}
+	
+	\section{Introduction}
+	
+	Modern vehicles have moved from simple mechanical assemblies into
+	extensively networked cyber-physical platforms. A typical vehicle now
+	integrates between 70 and 100 Electronic Control Units (ECUs) exchanging
+	roughly 2,500 internal signals over intra-vehicle networks
+	\cite{ref6,ref8,ref9}, and industry sources place the ECU count as high as
+	``more than a hundred'' in some modern platforms, with that number expected
+	to keep growing \cite{ref10}. These ECUs are grouped into functional
+	subnetworks -- powertrain, chassis, body, infotainment -- interconnected
+	through gateways using a mix of protocols: the Local Interconnect Network
+	(LIN) for low-speed, non-safety-critical functions such as window and seat
+	motors; FlexRay for high-bandwidth, deterministic applications like
+	steering-angle sensing and safety radar; Automotive Ethernet and the Media
+	Oriented Systems Transport (MOST) protocol for infotainment; and the
+	Controller Area Network (CAN) bus, which remains the dominant standard for
+	powertrain and body electronics owing to its low cost, mature tool-chain,
+	and strong fault tolerance \cite{ref4,ref6,ref9,ref10}. CAN itself is a
+	multi-master broadcast protocol developed by Robert Bosch GmbH in the
+	early 1980s, standardized under ISO 11898-1:2015, and extended in 2012
+	with the higher-throughput CAN FD variant (up to 5 Mbps and a 64-byte
+	payload, versus 8 bytes for classical CAN) \cite{ref10}. Every CAN frame
+	carries an 11- or 28-bit arbitration identifier, a data field of up to 8
+	bytes, a 15-bit CRC checksum, and fixed ACK/EOF delimiter bits; nodes
+	resolve simultaneous transmission through non-destructive bitwise
+	arbitration, in which the frame with the numerically lowest identifier --
+	and therefore highest priority -- wins the bus without any collision or
+	retransmission delay \cite{ref10}. This design is elegant for real-time
+	control, but it was built for a closed, physically isolated network: CAN
+	provides no message authentication, no encryption, and no means of
+	verifying the true origin of a frame, so once an adversary gains bus
+	access -- physically or, increasingly, remotely -- nothing in the
+	protocol itself prevents that adversary from injecting or spoofing frames
+	that every other node on the bus will treat as legitimate
+	\cite{ref4,ref6,ref10}.
+	
+	Embedded ML-based voltage fingerprinting is the product of a progressive
+	convergence of three separate research threads: the maturation of vehicle
+	automation and connectivity itself, the parallel rise of
+	automotive-specific cybersecurity engineering and regulation, and a long
+	lineage of CAN intrusion-detection research that has steadily moved from
+	purely cryptographic and message-content countermeasures toward
+	physical-layer signal analysis. An in-depth understanding of this
+	technical progression is essential to situate where voltage fingerprinting
+	fits, and why it has emerged now rather than a decade ago. The following
+	section traces this historical trajectory before turning to the standards
+	landscape that makes embedded, real-time detection a regulatory necessity
+	and the specific research gaps that motivate a physical-layer approach.
+	
+	\subsection{History}
+	
+	The trajectory of automotive cybersecurity research is closely tied to
+	the trajectory of vehicle automation itself. In 2014, the Society of
+	Automotive Engineers (SAE) published the J3016 standard, defining six
+	levels of driving automation from Level 0 (no automation) to Level 5
+	(full automation); the standard was significantly revised in
+	collaboration with ISO in 2021 and is now the industry's most-cited
+	reference on autonomous-vehicle capability, endorsed by UNECE
+	WP.29/GRVA, the U.S. NHTSA and DOT, and the California DMV as a basis for
+	further AV regulation \cite{ref1,ref2}. Commercial deployment followed
+	close behind the standardization effort. Google fitted an experimental
+	vehicle with lane-keeping and lane-changing capability in 2010, the same
+	year Toyota debuted the Lexus LS460L with an advanced parking-assist
+	system \cite{ref2}. General Motors followed in 2017 with its IoV-based
+	ENV series of self-parking smart cars, and Tesla progressively rolled out
+	its Autopilot system -- culminating in Autopilot 8.1 -- before offering
+	``full self-driving'' functionality to private owners \cite{ref2}.
+	Waymo, sharing a parent company with Google, became the first provider
+	to offer public driverless robo-taxi rides, launching in Phoenix,
+	Arizona, in 2020 \cite{ref1}. Underpinning much of this progress was the
+	parallel maturation of deep learning: Hinton's deep belief network (DBN)
+	in the mid-2000s catalyzed a wave of deep-structured learning
+	architectures that autonomous-vehicle developers subsequently adopted for
+	object detection, image classification, semantic segmentation, and
+	traffic-sign recognition, tasks for which abundant high-quality driving
+	datasets made deep models particularly attractive relative to classical
+	ML \cite{ref2}.
+	
+	Bibliometric analysis of the Web of Science database shows that the
+	first dedicated automotive-cybersecurity article was published in 2012,
+	after which output accelerated sharply -- of 801 studies identified under
+	the search terms ``cybersecurity''+``vehicle''/``automotive,'' roughly
+	two-thirds were published within just the three years preceding the
+	survey, and 133 were retained after PRISMA-style screening for relevance
+	and citation impact \cite{ref3}. This growth was not merely academic
+	curiosity; it tracked a parallel history of real intrusions and
+	near-misses. Early attack research showed that adversaries with physical
+	access could inject malicious messages directly onto the CAN bus, read
+	and modify ECU memory through interfaces such as CD players, USB ports,
+	and the OBD-II diagnostic port, and even extract ECU security keys
+	\cite{ref4}. As wireless connectivity -- Bluetooth, Wi-Fi, cellular, LTE,
+	5G -- became standard, many of these previously physical-access-only
+	attacks became remotely exploitable. Researchers demonstrated the
+	ability to hack vehicle key fobs and replay radio signals to unlock doors
+	without defeating any security key at all \cite{ref4}; hobbyists and
+	researchers alike showed that tire-pressure monitoring systems (TPMS)
+	could be spoofed to display false readings and trigger bogus warnings
+	\cite{ref4}; and a team reportedly compromised a Tesla Model S remotely
+	from 12 miles away \cite{ref4}. Researchers at Keen Security Labs
+	separately demonstrated a remote exploit of a Tesla Model S through its
+	camera system \cite{ref2}. Kaspersky Lab researchers exposed software
+	vulnerabilities in EV charging stations (EVCSs) that left them accessible
+	to unauthorized hackers \cite{ref1}, and Cai et al. uncovered multiple
+	vulnerabilities across several BMW models, including the ability to
+	compromise CAN-connected ECUs over a wireless link \cite{ref4}. The most
+	consequential single event was arguably Miller and Valasek's 2015 remote
+	compromise of a Jeep Cherokee traveling on a highway, which forced a
+	recall of 1.4 million vehicles and, per Luo et al., ``brought public
+	attention to automotive cybersecurity'' for the first time at scale
+	\cite{ref5}. Safety consequences followed directly from the security
+	failures: a Tesla operating in Autopilot mode was involved in a fatal
+	crash in Florida on May 7, 2016, and an Uber self-driving test vehicle
+	struck and killed a pedestrian in Tempe, Arizona, on November 20, 2018 --
+	itself the 38th crash involving that Uber AV fleet \cite{ref2}.
+	
+	Girdhar et al. later observed that existing post-collision investigation
+	frameworks, including the California AV collision reporting process
+	(which as of February 2022 cited causal factors such as incorrect
+	traffic-signal perception, degraded localization, map discrepancy, and
+	reduced visibility from occlusion) and ISO 12353-1 for conventional
+	accident analysis, catalogue an extensive list of physical and
+	perceptual causal factors but contain no provision for cyber-induced
+	causes at all -- a gap that motivated their proposed 5Ws-and-1H
+	digital-forensic investigation model, built on STRIDE threat modeling and
+	a stochastic anomaly-detection layer, specifically to reconstruct crash
+	scenarios in which a cyberattack on the vehicle, the charging
+	infrastructure, or the cooperative intelligent transport system (C-ITS)
+	may have been a contributing cause \cite{ref1}. On the detection side,
+	the field's earliest systematic reviews began cataloguing defenses in
+	parallel with cataloguing attacks. Al-Jarrah et al.'s 2019 survey of
+	intra-vehicle IDS work reviewed 42 detection schemes and organized them
+	by detection technique, feature-selection method, evaluation dataset,
+	targeted attack type, and benchmark model \cite{ref6}. Abu Elkhail et al.
+	separately catalogued the malware-defense landscape into five categories
+	-- signature-based, behavior-based, heuristic-based, cloud-based, and
+	machine-learning-based detection -- while noting that malware could enter
+	a vehicle through wireless roadside networks, Wi-Fi hotspots, cellular
+	connectivity, or even infected consumer devices such as phones and
+	laptops physically or wirelessly tethered to the car \cite{ref4}. Bozdal
+	et al.'s comprehensive CAN vulnerability assessment catalogued dozens of
+	experimentally implemented attacks on both passenger cars and
+	heavy-duty vehicles, and traced the shift in defensive research from
+	purely cryptographic countermeasures toward reactive, traffic-monitoring
+	intrusion detection systems (IDS) as a complementary layer of defense
+	precisely because CAN's built-in error-handling features -- bit-level
+	monitoring, the 21-bit CRC field, and the error-confinement mechanism
+	that forces a faulty node ``bus off'' once its transmit-error counter
+	exceeds 255 -- were designed for reliability, not security, and do
+	nothing to stop a well-formed but malicious frame \cite{ref10}.
+	
+	\subsection{Rationale}
+	
+	The rationale for continued, and increasingly urgent, investment in
+	automotive cybersecurity is grounded in a widening gap between the pace
+	of vehicle automation and the pace of safety validation. Girdhar et al.
+	report that autonomous vehicles currently average 9.1 crashes per million
+	miles driven, more than double the 4.1 crashes per million miles for
+	conventional human-driven vehicles \cite{ref1} -- a statistic that
+	undercuts the common assumption that automation is inherently safer, and
+	one that places extra weight on eliminating cyber-induced failure modes
+	specifically. Adu-Kyere et al. add a market-scale dimension to this
+	urgency, citing projections of 115 million connected vehicles by 2025
+	alongside reports that the frequency of attacks on modern cars increased
+	by 225\% over the preceding three years \cite{ref12} -- figures that
+	describe an attack surface growing considerably faster than the fleet
+	itself.
+	
+	Regulatory bodies have responded, but on a lag, and the standards
+	landscape itself has evolved in visible stages. Historically, functional
+	safety and functional security for conventional road vehicles were
+	governed separately by ISO 26262 and SAE J3061, neither of which was
+	written with autonomous-specific functionality in mind \cite{ref1}. SAE
+	published J3061 in 2016, establishing the now-foundational principle that
+	cybersecurity must be designed into a feature from the outset rather than
+	appended at the end of development \cite{ref3}. In 2021, the UNECE's
+	World Forum for Harmonization of Vehicle Regulations published UN
+	Regulation No. 155, requiring every OEM to operate a formal Cyber
+	Security Management System (CSMS) addressing organizational processes,
+	responsibilities, and governance across the vehicle lifecycle, and to
+	demonstrate that risk-management process when seeking vehicle type
+	approval \cite{ref3}. ISO/SAE 21434:2021 subsequently codified the
+	detailed engineering requirements for managing cybersecurity risk across
+	concept, product development, production, operation, maintenance, and
+	decommissioning phases of electrical/electronic (E/E) systems, becoming
+	mandatory for all newly manufactured vehicles from July 2024
+	\cite{ref3}. A recurring theme across the surveyed standards literature
+	is that this new Cyber Security Management System must be integrated
+	into an automotive software development lifecycle that was not
+	originally built to accommodate it -- Kifor and Popescu note that, in
+	the initial implementation phase, CSMS processes are typically bolted on
+	as an ``add-on'' to existing tools, mirroring how ISO 26262
+	functional-safety requirements were only gradually absorbed into
+	mainstream development practice over the preceding decade \cite{ref3}.
+	Complementary standards round out the landscape: UL4600 and the Safety
+	of the Intended Functionality (SOTIF) framework address autonomous-system
+	safety cases where no human is available to intervene on failure, while
+	ISO 34501--34503 and IAMTS/ASAM guidance extend the SAE J3016 taxonomy
+	into concrete testing and simulation practice \cite{ref1,ref2}. Yet even
+	with this apparatus in place, Luo et al.'s systematic review of
+	automotive cybersecurity \emph{testing} practice found that where
+	ISO/SAE 21434 and UNECE WP.29 (R155/R156) explicitly mandate security
+	verification and validation, the standards provide no specific technical
+	guidance on how that testing should actually be carried out -- the
+	guidance is described as ``high-level,'' making ``the actual execution
+	of the test difficult'' for OEMs and suppliers who must independently
+	decide on cost, automation level, and safety of their testing process
+	\cite{ref5}. This is precisely the gap that motivates a stronger
+	empirical and technical literature: standards establish that testing and
+	detection are required, but not how to build detection mechanisms that
+	are simultaneously accurate, real-time, and deployable on
+	resource-constrained ECUs.
+	
+	\subsection{Motivation}
+	
+	Despite more than a decade of concentrated IDS research, several
+	converging observations from the surveyed literature motivate a shift
+	toward physical-layer, embedded ML-based detection specifically. First,
+	the field remains fragmented at the taxonomic level. Karopoulos et al.'s
+	meta-survey compares twelve prior IDS surveys published between 2018 and
+	2021 and finds persistent disagreement over even basic categorization:
+	some surveys scope themselves to CAN alone while others span LIN,
+	FlexRay, Ethernet, and MOST; some provide explicit performance comparison
+	across reviewed works while others do not; and the number of underlying
+	works reviewed ranges from as few as 5 to as many as 42 across otherwise
+	comparable surveys \cite{ref9}. Beneath this inconsistency, however, a
+	recurring four-way taxonomy does emerge across the literature:
+	message-parameter-based detection (operating at the MAC layer),
+	information-theory-based detection (typically exploiting entropy),
+	machine-learning-based detection, and fingerprinting-based detection
+	operating on the physical layer via clock or transmission-energy
+	variation \cite{ref9}. One particularly telling data point emerges
+	directly relevant to this review's focus: of the fingerprinting-based
+	VIDS approaches surveyed, four out of five achieved greater than 96\%
+	accuracy -- the highest reliability band among all IDS categories
+	reviewed -- but three of those five required the addition of extra
+	dedicated hardware to the vehicle, undercutting their practicality for
+	retrofit or low-cost deployment \cite{ref9}. This tension between high
+	accuracy and hardware overhead is exactly the design space that
+	voltage-fingerprinting on embedded, resource-constrained platforms must
+	resolve.
+	
+	Second, the machine-learning side of the taxonomy has itself grown
+	considerably more sophisticated without fully closing the deployment
+	gap. Ghadi and Khan Mohd's 2026 deployment-focused survey organizes
+	learning-based CAN IDS into ML-based, DL-based, and hybrid categories:
+	classical ML methods such as Support Vector Machines, Decision Trees,
+	Random Forests, K-Nearest Neighbors, XGBoost, and Naïve Bayes offer model
+	transparency and low computational overhead well suited to
+	resource-limited ECUs, but their dependence on manually engineered
+	features limits generalization to unseen attacks; DL methods -- Recurrent
+	Neural Networks, LSTM networks, Convolutional Neural Networks, and
+	Transformer-based models -- overcome this by automatically extracting
+	feature and sequence-based patterns from raw CAN traffic and achieve
+	state-of-the-art accuracy on complex attack vectors, at the cost of
+	heavier compute; and hybrid ML/DL approaches attempt to combine the two
+	\cite{ref7}. Across studies published between 2019 and 2025 surveyed
+	under this taxonomy, the authors found that ``claims related to
+	real-time performance or lightweight deployment are frequently made
+	without sufficient practical validation,'' and the survey found it
+	necessary to introduce its own explicit criteria for what should count
+	as evidence of ``lightweight,'' ``real-time,'' or ``deployable'' --
+	namely ECU-oriented runtime analysis, embedded evaluation, or
+	real-vehicle experimentation -- because so few prior works substantiated
+	these claims on genuine embedded hardware \cite{ref7}. Almehdhar et al.
+	corroborate this from a different angle, situating CAN threats within a
+	three-layer Autonomous Vehicular Sensing Communication Control
+	(AutoVSCC) framework: the sensing layer is vulnerable to spoofing and
+	eavesdropping on inertial or radar sensors, GPS jamming, TPMS
+	interception, and ultrasonic-sensor manipulation; threats here propagate
+	upward through the communication layer (eavesdropping, message
+	manipulation, unauthorized infotainment/telematics access) and
+	ultimately reach the control layer, corrupting real-time functions such
+	as automated steering, lane-change maneuvers, and braking \cite{ref8}.
+	This layered propagation matters directly for detection-system design:
+	an IDS that inspects only message content at the communication layer is
+	structurally blind to attacks that originate at the sensing layer and
+	only manifest as anomalies in the underlying physical signal.
+	
+	Third, the threat landscape for AI-enabled autonomous functions
+	specifically has opened an entirely separate motivational thread.
+	Girdhar, Hong, and Moore's systematic review of adversarial attacks on
+	autonomous driving finds that deep-learning models used for object
+	detection, image classification, and semantic segmentation are
+	vulnerable to deliberately crafted perturbations -- patterns
+	imperceptible to human drivers but sufficient to reliably deceive the AI
+	model -- and that this vulnerability has so far been demonstrated
+	primarily on image-classification models, leaving the effectiveness of
+	both attacks and defenses against regression-style autonomous-driving
+	models comparatively unexplored \cite{ref2}. Because DL models operate
+	largely as black boxes during inference, with limited interpretability
+	or explainability, conventional defenses developed for other domains do
+	not transfer cleanly, and the authors note that even research using
+	explainable-AI methods (such as logic learning machines or support
+	vector data description) has been needed to correctly flag adversarial
+	attacks that classical algorithms missed entirely \cite{ref2}. Taken
+	together, these findings motivate embedded ML-based voltage
+	fingerprinting as a response to a well-documented, specific gap:
+	existing IDS work already shows that physical-layer signal
+	characteristics deliver the highest accuracy of any detection category,
+	but has not yet resolved how to deliver that accuracy without extra
+	hardware, on real embedded automotive processors, in real time, and
+	largely independent of the content-level vulnerabilities that plague
+	both traditional message-based IDS and AI perception models alike.
+	
+	\subsection{Scope}
+	
+	This survey focuses on embedded machine learning-based voltage
+	fingerprinting as a physical-layer complement to conventional,
+	message-content-based CAN intrusion detection. It reviews the
+	fundamentals of CAN protocol security and the regulatory standards now
+	governing it, examines the architectures and taxonomies of ML-based
+	fingerprinting approaches, benchmarks their detection performance and
+	embedded deployment feasibility against the lightweight/real-time
+	evidentiary standard raised by recent deployment-focused surveys, and
+	surveys the open challenges -- fabrication/hardware overhead, dataset
+	standardization, and cross-vehicle generalization -- and emerging
+	directions in the field. It extends the anchor work of Dini
+	\textit{et al.} on embedded ML-based voltage fingerprinting for CAN bus
+	ECU identification \cite{refDini} into a broader, systematically
+	organized review of the surrounding literature spanning historical IDS
+	taxonomies,
+	adversarial-ML threats to AI-enabled vehicle functions, and the standards
+	landscape that now mandates -- without yet fully specifying -- how
+	automotive security must be tested and proven.
+	
+	\section{Fundamentals of Vehicular Network Security and Trust Establishment}
+	
+	Modern connected vehicles are built on a layered communication fabric
+	rather than a single network. The Controller Area Network (CAN) bus
+	forms the foundational layer, linking ECUs through broadcast,
+	identifier-arbitrated frames, as described in Section I. Automotive
+	Ethernet is emerging as a parallel high-bandwidth layer for
+	sensor-fusion and autonomy workloads \cite{ref28}. Above both sits the
+	outward-facing V2X/Internet-of-Vehicles (IoV) layer, connecting the
+	vehicle to roadside infrastructure, edge servers, other vehicles, and
+	the cloud \cite{ref13,ref14,ref15,ref16,ref17,ref18,ref19,ref20,ref30}.
+	Unlike conventional enterprise IT networks, all three layers interface
+	directly with real-time physical control loops, so cybersecurity
+	mechanisms that work in IT contexts -- heavy encryption, deep packet
+	inspection, centralized certificate revocation -- frequently cannot be
+	applied without redesign. This constraint is what has driven the shift
+	toward lightweight, hardware-rooted, and decentralized trust mechanisms
+	purpose-built for vehicular limits, rather than borrowed wholesale from
+	IT security.
+	
+	Recent work indicates that three closely related factors govern the
+	effective operation of automotive cybersecurity architectures. (i) The
+	network's protocol topology and bandwidth budget determine how much
+	authentication payload, key material, and cryptographic computation a
+	link can carry without violating real-time latency constraints
+	\cite{ref21}. (ii) The physical and cryptographic trust-establishment
+	principle in use -- asymmetric or post-quantum key exchange, physical
+	unclonable functions (PUFs), or blockchain-anchored consensus --
+	determines how communicating entities verify one another without a
+	single point of failure \cite{ref13,ref14,ref15,ref16,ref17,ref18,ref19,ref20,ref22}.
+	(iii) The risk-assessment and access-control methodology applied --
+	threat analysis and risk assessment (TARA) frameworks, formal
+	verification, or selective/targeted authentication policy -- determines
+	how residual threats are quantified, prioritized, and mitigated across
+	the vehicle's development and operational lifecycle
+	\cite{ref29,ref30}.
+	
+	\begin{figure}[t]
+		\centering
+		\fbox{\parbox[c][5.5cm][c]{8cm}{\centering\itshape
+				Placeholder --- diagrammatic overview of the three-layer vehicular
+				network stack (CAN / Automotive Ethernet / cloud-assisted V2X-IoV)
+				and their associated trust boundaries, to be inserted.}}
+		\caption{Layered vehicular network architecture and associated
+			trust-establishment boundaries.}
+		\label{fig:layered_arch}
+	\end{figure}
+	
+	\subsection{Network Architectures Relevant to Trust Integration}
+	
+	The topology of the network directly constrains how much authentication
+	and cryptographic overhead a security mechanism can carry without
+	violating the link's latency budget. Structural parameters -- frame
+	payload size, arbitration scheme, available bandwidth, and the number
+	of interconnected ECUs, RSUs, or cloud endpoints -- jointly determine
+	bus load, message latency, and exposure to spoofing. Structural
+	characterization is therefore a prerequisite for designing any
+	deployable defense. Vehicular network architectures can be broadly
+	classified by backbone protocol into CAN-based, Automotive-Ethernet-based,
+	and cloud-assisted V2X/IoV architectures.
+	
+	CAN-based architectures carry an 8-byte classical payload per frame and
+	no native authentication, so any added security mechanism competes
+	directly with control-message bandwidth. Wang et al. \cite{ref21} show
+	this trade-off concretely: their dynamic compression and per-ECU
+	key-rotation scheme reduces bus load by roughly 8\% on average while
+	keeping single-message authentication computation in the
+	sub-millisecond range at automotive ECU clock speeds -- evidence that
+	CAN security design is fundamentally a bandwidth-allocation problem,
+	not only a cryptographic-strength problem. The bus-load overhead
+	imposed by an added authentication mechanism can be expressed as
+	\begin{equation}
+		\rho = \frac{N_{\text{auth}} \times L_{\text{auth}}}{B \times T}
+		\label{eq:busload}
+	\end{equation}
+	where $N_{\text{auth}}$ is the number of authentication frames
+	transmitted per window, $L_{\text{auth}}$ is the authentication
+	payload length in bits, $B$ is the bus bandwidth, and $T$ is the
+	observation window.
+	
+	Automotive-Ethernet-based architectures relax the payload constraint but
+	inherit IT-style network threats. Wang et al. \cite{ref28} characterize
+	In-Vehicle Ethernet as the backbone of next-generation in-vehicle
+	communication and show that data theft, tampering, and injected traffic
+	on protocols such as AVTP require traffic-pattern-based intrusion
+	detection rather than per-frame cryptographic authentication, reporting
+	a 99.7\% anomaly detection rate with their weighted-histogram method.
+	
+	Cloud-assisted V2X/IoV architectures extend the trust boundary outward
+	again, to RSUs, edge servers, and cloud management centers
+	\cite{ref13,ref14,ref15,ref16,ref17,ref18,ref19,ref20}. Sheik et al.
+	\cite{ref30} show that this extension changes the threat surface
+	qualitatively: complex hardware--software interaction and
+	heterogeneous protocol stacks mean that off-the-shelf risk-scoring
+	templates poorly capture Cloud-Assisted Connected and Autonomous
+	Vehicle (CCAV) threats, motivating their STRIDE/DREAD-based
+	reassessment. Risk under DREAD is scored as
+	\begin{equation}
+		\mathrm{Risk}_{\mathrm{DREAD}} = \frac{D + R + E + A + \mathrm{Disc}}{5}
+		\label{eq:dread}
+	\end{equation}
+	where $D$, $R$, $E$, $A$, and $\mathrm{Disc}$ are the Damage,
+	Reproducibility, Exploitability, Affected-users, and Discoverability
+	sub-scores \cite{ref30}.
+	
+	Taken together, architecture, trust principle, and risk quantification
+	combine to determine the achievable security posture of a vehicular
+	network: none of the three is sufficient alone, and design choices in
+	one constrain what is achievable in the others.
+	
+	\subsection{Mechanisms of Threat and Trust Interaction}
+	
+	In vehicular networks, entities interact through several distinct
+	threat and trust-establishment mechanisms, depending on the network
+	layer and the adversary's capability. These include message injection
+	and spoofing, eavesdropping and man-in-the-middle interception,
+	resource-exhaustion attacks on offloading infrastructure, cryptographic
+	key-agreement--based mutual authentication, and decentralized
+	ledger-based consensus trust. Each mechanism shapes a different class
+	of defense.
+	
+	Message injection and spoofing is the fundamental threat mechanism on
+	broadcast media such as CAN, where any node with bus access can
+	transmit frames impersonating another ECU; Wang et al. \cite{ref21}
+	address this directly through per-message dynamic keying rather than
+	static authentication, since a static key is trivially replayable on a
+	broadcast bus.
+	
+	Eavesdropping and man-in-the-middle interception dominate on V2X
+	wireless links, where Dai et al. \cite{ref13} note that classical
+	RSA/ECC-based key exchange is vulnerable both to passive interception
+	today and, prospectively, to quantum-capable adversaries --
+	motivating their hybrid Kyber+Saber post-quantum handshake -- while
+	Escapa Gord\'on et al. \cite{ref15} address the same interception risk
+	through identity-based cryptography keyed to the Vehicle Identification
+	Number (VIN), removing the certificate-exchange step that is itself a
+	common interception target.
+	
+	Resource-exhaustion attacks target the newer V2X computing-offload
+	surface: Liu et al. \cite{ref14} show that an attacker impersonating
+	either a requesting vehicle or an edge server can exhaust server
+	compute resources or exfiltrate offloaded task data, requiring
+	four-party authentication (vehicle, RSU, edge server, cloud management
+	center) before any task offload is accepted.
+	
+	Cryptographic key-agreement--based mutual authentication is the active
+	countermeasure mechanism common to \cite{ref13,ref14,ref15,ref22}: two
+	or more parties jointly derive a shared session key such that neither
+	could have derived it alone, closing the injection and interception
+	mechanisms above. Madububa Mbachu et al. \cite{ref22} root this process
+	in hardware via a Physical Unclonable Function (PUF), deriving the key
+	material from FPGA-level manufacturing variation rather than a stored
+	secret, which removes key-extraction-by-firmware-dump as an attack
+	vector.
+	
+	Decentralized ledger-based consensus trust is the mechanism underlying
+	\cite{ref16,ref17,ref18,ref19,ref20}: rather than a single Trusted
+	Authority verifying every entity, a blockchain ledger distributes the
+	verification record across Roadside Units or Trusted Authentication
+	Servers, so that compromising one node does not compromise the
+	authentication record for the network as a whole. Abbas et al.
+	\cite{ref16} frame this as trading a single point of failure for a
+	coordination overhead -- the recurring cost of removing centralized
+	trust.
+	
+	\begin{figure}[t]
+		\centering
+		\fbox{\parbox[c][5.5cm][c]{8cm}{\centering\itshape
+				Placeholder --- flow diagram of the five threat/trust mechanisms
+				(injection/spoofing, eavesdropping/MITM, resource exhaustion,
+				key-agreement authentication, ledger-based consensus) mapped
+				against network layer, to be inserted.}}
+		\caption{Threat and trust-establishment mechanisms mapped to
+			vehicular network layer.}
+		\label{fig:mechanisms}
+	\end{figure}
+	
+	\subsection{Trust Establishment and Access-Control Techniques}
+	
+	Establishing entity trust in a resource-constrained, latency-sensitive
+	vehicular network is achieved through three broad technique families,
+	differing in where the trust anchor resides and what infrastructure
+	they require: lightweight cryptographic techniques, decentralized
+	ledger-based techniques, and hardware-rooted/selective techniques.
+	
+	Lightweight cryptographic techniques are the simplest and most widely
+	deployable, requiring no additional network infrastructure beyond the
+	communicating entities themselves. Dai et al. \cite{ref13} and Liu et
+	al. \cite{ref14} fall in this category: security derives entirely from
+	the mathematical hardness of the underlying problem (lattice-based
+	KEMs, formally-verified handshake protocols) and validation is
+	correspondingly fast -- \cite{ref13} reports roughly 60\% lower
+	handshake latency than RSA. The limitation is that a compromised or
+	lost key directly compromises the entity's identity, with no
+	distributed fallback.
+	
+	Decentralized ledger-based techniques address that single-point-of-compromise
+	limitation by distributing the authentication record itself. Rahayu et
+	al. \cite{ref17}, Ali et al. \cite{ref18}, Kebande et al. \cite{ref19},
+	and Li et al. \cite{ref20} all anchor authentication state in a
+	blockchain accessible to multiple Roadside Units or Trusted
+	Authentication Servers, so no single compromised node can forge or
+	erase an authentication record. The cost is coordination and consensus
+	latency: \cite{ref17} shows this latency scales with the number of
+	Trusted Authentication Servers in a given topology, and \cite{ref18}
+	reports the resulting computational overhead at under 2\% -- an
+	acceptable but non-zero cost of removing centralization.
+	
+	Hardware-rooted and selective techniques target the specific
+	weaknesses of the two families above. Madububa Mbachu et al.
+	\cite{ref22} anchor trust in silicon-level manufacturing variation via
+	a PUF rather than a storable secret, evaluated on real FPGA hardware
+	with sub-40-microsecond encryption times. Luo et al. \cite{ref29} and
+	Sheik et al. \cite{ref30} instead operate one layer up, applying
+	selective, risk-prioritized authentication and formal
+	threat-requirement matching rather than uniform enforcement everywhere
+	-- directing scarce cryptographic and verification effort toward the
+	highest-DREAD-scored threats rather than treating all links
+	identically.
+	
+	\begin{table}[t]
+		\centering
+		\caption{Comparison of Vehicular Trust-Establishment Technique Families}
+		\label{tab:trust_families}
+		\small
+		\begin{tabular}{p{1.7cm}p{1.6cm}p{1.6cm}p{2.4cm}}
+			\toprule
+			\textbf{Technique Family} & \textbf{Trust Anchor} & \textbf{Infrastructure} & \textbf{Key Trade-off} \\
+			\midrule
+			Lightweight cryptographic & Shared/derived session key & None beyond endpoints & Low latency vs.\ no distributed fallback \\
+			\addlinespace
+			Decentralized ledger-based & Distributed ledger record & RSU/TAS blockchain network & No single point of failure vs.\ consensus overhead \\
+			\addlinespace
+			Hardware-rooted / selective & Physical fingerprint or risk score & FPGA/PUF or formal threat model & Unclonability / focused effort vs.\ fabrication or modeling overhead \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	As Table~\ref{tab:trust_families} summarizes, no single technique
+	family dominates: lightweight cryptography optimizes for latency,
+	ledger-based techniques optimize for elimination of centralized trust,
+	and hardware-rooted/selective techniques optimize for physical
+	unclonability and risk-proportional effort -- each accepting a
+	different overhead in exchange. Representative references for each
+	family are given in Table~\ref{tab:trust_families_refs}.
+	
+	\begin{table}[t]
+		\centering
+		\caption{Representative References by Technique Family}
+		\label{tab:trust_families_refs}
+		\small
+		\begin{tabular}{p{3.6cm}p{3.6cm}}
+			\toprule
+			\textbf{Technique Family} & \textbf{Representative References} \\
+			\midrule
+			Lightweight cryptographic & \cite{ref13,ref14,ref15} \\
+			Decentralized ledger-based & \cite{ref16,ref17,ref18,ref19,ref20} \\
+			Hardware-rooted / selective & \cite{ref22,ref29,ref30} \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	% ============================================================
+	% SECTION III onward to be appended here as they are drafted.
+	% ============================================================
+	
+	\begin{thebibliography}{99}
+		
+		\bibitem{ref1} M. Girdhar, Y. You, T.-J. Song, S. Ghosh, and J. Hong,
+		``Post-Accident Cyberattack Event Analysis for Connected and Automated
+		Vehicles,'' \emph{IEEE Access}, vol. 10, pp. 83176--XXXXX, 2022, doi:
+		10.1109/ACCESS.2022.3196346.
+		
+		\bibitem{ref2} M. Girdhar, J. Hong, and J. Moore, ``Cybersecurity of
+		Autonomous Vehicles: A Systematic Literature Review of Adversarial Attacks
+		and Defense Models,'' \emph{IEEE Open J. Veh. Technol.}, vol. 4, 2023,
+		doi: 10.1109/OJVT.2023.3265363.
+		
+		\bibitem{ref3} C. V. Kifor and A. Popescu, ``Automotive Cybersecurity: A
+		Survey on Frameworks, Standards, and Testing and Monitoring
+		Technologies,'' \emph{Sensors}, vol. 24, no. 18, p. 6139, 2024, doi:
+		10.3390/s24186139.
+		
+		\bibitem{ref4} A. Abu Elkhail, R. U. D. Refat, R. Habre, A. Hafeez, A.
+		Bacha, and H. Malik, ``Vehicle Security: A Survey of Security Issues and
+		Vulnerabilities, Malware Attacks and Defenses,'' \emph{IEEE Access}, vol.
+		9, pp. 162401--XXXXX, 2021, doi: 10.1109/ACCESS.2021.3130495.
+		
+		\bibitem{ref5} F. Luo, X. Zhang, Z. Yang, Y. Jiang, J. Wang, M. Wu, and W.
+		Feng, ``Cybersecurity Testing for Automotive Domain: A Survey,''
+		\emph{Sensors}, vol. 22, no. 23, p. 9211, 2022, doi: 10.3390/s22239211.
+		
+		\bibitem{ref6} O. Y. Al-Jarrah, C. Maple, M. Dianati, D. Oxtoby, and A.
+		Mouzakitis, ``Intrusion Detection Systems for Intra-Vehicle Networks: A
+		Review,'' \emph{IEEE Access}, vol. 7, pp. 21266--21289, 2019, doi:
+		10.1109/ACCESS.2019.2894183.
+		
+		\bibitem{ref7} A. Ghadi and T. Khan Mohd, ``Learning-Based Intrusion
+		Detection Systems for In-Vehicle CAN Networks: A Comprehensive Survey with
+		Deployment and Real-Time Considerations,'' \emph{J. Braz. Comput. Soc.},
+		vol. 32, p. 1, 2026, doi: 10.5753/jbcs.2026.6140.
+		
+		\bibitem{ref8} M. Almehdhar, A. Albaseer, M. A. Khan, M. Abdallah, H.
+		Menouar, S. Al-Kuwari, and A. Al-Fuqaha, ``Deep Learning in the Fast Lane:
+		A Survey on Advanced Intrusion Detection Systems for Intelligent Vehicle
+		Networks,'' \emph{IEEE Open J. Veh. Technol.}, vol. 5, 2024, doi:
+		10.1109/OJVT.2024.3422253.
+		
+		\bibitem{ref9} G. Karopoulos, G. Kambourakis, E. Chatzoglou, J. L.
+		Hern\'andez-Ramos, and V. Kouliaridis, ``Demystifying In-Vehicle Intrusion
+		Detection Systems: A Survey of Surveys and a Meta-Taxonomy,''
+		\emph{Electronics}, vol. 11, no. 7, p. 1072, 2022, doi:
+		10.3390/electronics11071072.
+		
+		\bibitem{ref10} M. Bozdal, M. Samie, S. Aslam, and I. Jennions,
+		``Evaluation of CAN Bus Security Challenges,'' \emph{Sensors}, vol. 20,
+		no. 8, p. 2364, 2020, doi: 10.3390/s20082364.
+		
+		\bibitem{ref11} T. C. M. D\"onmez, ``Anomaly Detection in Vehicular CAN Bus
+		Using Message Identifier Sequences,'' \emph{IEEE Access}, vol. 9, pp.
+		136243--XXXXX, 2021, doi: 10.1109/ACCESS.2021.3117038.
+		
+		\bibitem{ref12} A. Adu-Kyere, E. Nigussie, and J. Isoaho, ``Self-Aware
+		Cybersecurity Architecture for Autonomous Vehicles: Security through
+		System-Level Accountability,'' \emph{Sensors}, vol. 23, no. 21, p. 8817,
+		2023, doi: 10.3390/s23218817.
+		
+		\bibitem{ref13} Y. Dai, Q. Wang, X. Song, and S. Wang, ``A Lightweight
+		Key Agreement Protocol for V2X Communications Based on Kyber and
+		Saber,'' \emph{Sensors}, vol. 25, no. 22, p. 6938, 2025, doi:
+		10.3390/s25226938.
+		
+		\bibitem{ref14} Y. Liu, C. Li, Q. Sun, and H. Jiang, ``Security
+		Authentication Scheme for Vehicle-to-Everything Computing Task
+		Offloading Environments,'' \emph{Sensors}, vol. 25, no. 20, p. 6428,
+		2025, doi: 10.3390/s25206428.
+		
+		\bibitem{ref15} P. Escapa Gord\'on, V. Matell\'an Olivera, and A.
+		Su\'arez Corona, ``Vehicle-to-Vehicle Secure Communication Protocol
+		Based on Identity-Based Cryptography Using the Vehicle Identification
+		Number,'' \emph{Sensors}, vol. 25, no. 19, p. 5954, 2025, doi:
+		10.3390/s25195954. \emph{[Title reconstructed from truncated OCR text
+			-- verify exact wording on Scopus.]}
+		
+		\bibitem{ref16} S. Abbas, M. Abu Talib, A. Ahmed, F. Khan, S. Ahmad,
+		and D.-H. Kim, ``Blockchain-Based Authentication in Internet of
+		Vehicles: A Survey,'' \emph{Sensors}, 2024. \emph{[DOI/vol./issue
+			pending Scopus verification.]}
+		
+		\bibitem{ref17} M. Rahayu, M. B. Hossain, S. Huda, Y. Kodera, M. A.
+		Ali, and Y. Nogami, ``The Design and Implementation of
+		Kerberos-Blockchain Vehicular Authentication for VANETs,''
+		\emph{Sensors}, vol. 24, no. 23, p. 7428, 2024, doi:
+		10.3390/s24237428.
+		
+		\bibitem{ref18} G. Ali, M. ElAffendi, and N. Ahmad, ``BlockAuth: A
+		Blockchain-Based Framework for Secure Vehicle Authentication and
+		Authorization,'' \emph{PLoS ONE}, vol. 18, no. 9, p. e0291596, 2023,
+		doi: 10.1371/journal.pone.0291596.
+		
+		\bibitem{ref19} V. R. Kebande, F. M. Awaysheh, R. A. Ikuesan, S. A.
+		Alawadi, and M. D. Alshehri, ``A Blockchain-Based Multi-Factor
+		Authentication Model for Vehicular Cloud and Cloud-Enabled Internet of
+		Vehicles.'' \emph{[Journal/vol./DOI pending Scopus verification.]}
+		
+		\bibitem{ref20} J. Li, Y. Lin, Y. Li, Y. Zhuang, and Y. Cao, ``BPA: A
+		Novel Blockchain-Based Privacy-Preserving Authentication Scheme for
+		the Internet of Vehicles,'' \emph{Electronics}, 2024. \emph{[Vol.
+			/issue/DOI pending Scopus verification.]}
+		
+		\bibitem{ref21} Y. Wang, Y. Xu, Z. Liu, S. Liu, and Y. Wu, ``Research
+		on Lightweight Dynamic Security Protocol for Intelligent In-Vehicle
+		CAN Bus,'' \emph{Sensors}, vol. 25, no. 11, p. 3380, 2025, doi:
+		10.3390/s25113380.
+		
+		\bibitem{ref22} U. Madububa Mbachu, R. Fatima, A. Sherif, E. Dockery,
+		M. Mahmoud, M. Alsabaan, and K. Khalil, ``Hardware Acceleration-Based
+		PUF Authentication for the Internet of Vehicles,'' \emph{Sensors},
+		vol. 25, no. 5, p. 1629, 2025, doi: 10.3390/s25051629.
+		
+		\bibitem{ref23} E. F. Morgan and M. H. Ali, ``Digital Twin-Driven
+		Cybersecurity for 5G/6G-Enabled Electric Vehicle Charging
+		Infrastructure: A Review.'' \emph{[Journal/vol./DOI pending Scopus
+			verification.]}
+		
+		\bibitem{ref24} S. Hamdare, O. Kaiwartya, M. Aljaidi, M. Jugran, Y.
+		Cao, S. Kumar, M. Mahmud, D. Brown, and J. Lloret, ``Cybersecurity
+		Risk Analysis of Electric Vehicle Charging Station Network
+		Infrastructure.'' \emph{[Journal/vol./DOI pending Scopus
+			verification.]}
+		
+		\bibitem{ref25} J. Johnson, T. Berg, B. Anderson, and B. Wright,
+		``Review of Electric Vehicle Charger Cybersecurity Vulnerabilities,
+		Potential Impacts, and Defenses,'' \emph{Sensors}, vol. 23, no. 15,
+		p. 6716, 2023, doi: 10.3390/s23156716.
+		
+		\bibitem{ref26} S. Hamdare, D. J. Brown, Y. Cao, M. Aljaidi, S.
+		Kumar, R. Alanazi, M. Jugran, P. Vyas, and O. Kaiwartya, ``A Novel
+		Charging Management and Security Framework for the Electric Vehicle
+		Ecosystem.'' \emph{[Journal/vol./DOI pending Scopus verification.]}
+		
+		\bibitem{ref27} M. ElKashlan, M. S. Elsayed, A. D. Jurcut, and M.
+		Azer, ``A Machine Learning-Based Intrusion Detection System for IoT
+		Electric Vehicle Charging Stations.'' \emph{[Journal/vol./DOI
+			pending Scopus verification.]}
+		
+		\bibitem{ref28} Y. Wang, Y. Wu, Y. Xu, K. Zhang, and Y. Xu, ``Research
+		on Network Intrusion Detection Based on Weighted Histogram Algorithm
+		for In-Vehicle Ethernet.'' \emph{[Journal/vol./DOI pending Scopus
+			verification.]}
+		
+		\bibitem{ref29} F. Luo, Y. Jiang, J. Wang, Z. Li, and X. Zhang, ``A
+		Framework for Cybersecurity Requirements Management in the Automotive
+		Domain.'' \emph{[Journal/vol./DOI pending Scopus verification.]}
+		
+		\bibitem{ref30} A. T. Sheik, C. Maple, G. Epiphaniou, and M. Dianati,
+		``Securing Cloud-Assisted Connected and Autonomous Vehicles: An
+		In-Depth Threat Analysis and Risk Assessment.'' \emph{[Journal/vol./DOI
+			pending Scopus verification.]}
+		
+		\bibitem{refDini} G. Dini \emph{et al.}, [Embedded ML-based voltage
+		fingerprinting for CAN bus ECU identification], \emph{IEEE Access}, 2025,
+		doi: 10.1109/ACCESS.2025.3545245.
+		
+	\end{thebibliography}
+	
+\end{document}
